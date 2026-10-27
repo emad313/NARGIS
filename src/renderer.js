@@ -21,6 +21,9 @@ let hasSpeech = false;
 let selectedSpeechVoice = '';
 let continuousVoice = false;
 let stopVoiceRequested = false;
+let speechQueue = [];
+let pendingSpeechText = '';
+let speechActive = false;
 
 const SYSTEM_PROMPT = `You are NARGIS, a capable, calm, concise personal AI assistant inspired by a futuristic cinematic assistant. You run locally on the user's computer using Qwen through Ollama. Be helpful and direct. Use clear formatting when useful. You may speak English or Bangla based on the user's language. Never claim you have performed actions on the computer unless a real tool has confirmed it. You do not have access to the web, files, or operating system unless a tool is explicitly provided. If asked to control the computer, explain what the user can do or ask before suggesting risky steps.`;
 
@@ -68,13 +71,46 @@ function setBusy(value) {
 
 function speak(text) {
   if (!voiceReplies || !('speechSynthesis' in window)) return;
-  window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text.slice(0, 3500));
   utterance.rate = 1;
   utterance.pitch = 0.92;
   const voices = window.speechSynthesis.getVoices();
   utterance.voice = voices.find(voice => voice.voiceURI === selectedSpeechVoice) || null;
+  utterance.onend = () => {
+    speechActive = false;
+    playNextSpeech();
+  };
+  utterance.onerror = () => {
+    speechActive = false;
+    playNextSpeech();
+  };
   window.speechSynthesis.speak(utterance);
+}
+
+function playNextSpeech() {
+  if (speechActive || !speechQueue.length || !voiceReplies) return;
+  speechActive = true;
+  speak(speechQueue.shift());
+}
+
+function queueSpeech(text, flush = false) {
+  if (!voiceReplies || !('speechSynthesis' in window)) return;
+  pendingSpeechText += text;
+  const parts = pendingSpeechText.split(/(?<=[.!?。！？])\s+/);
+  pendingSpeechText = flush ? '' : parts.pop() || '';
+  if (!flush && !parts.length && pendingSpeechText.length >= 140) {
+    const splitAt = pendingSpeechText.lastIndexOf(' ', 140);
+    if (splitAt > 0) {
+      parts.push(pendingSpeechText.slice(0, splitAt));
+      pendingSpeechText = pendingSpeechText.slice(splitAt + 1);
+    }
+  }
+  speechQueue.push(...parts.filter(part => part.trim()));
+  if (flush && pendingSpeechText.trim()) {
+    speechQueue.push(pendingSpeechText.trim());
+    pendingSpeechText = '';
+  }
+  playNextSpeech();
 }
 
 function updateSpeechVoices() {
@@ -134,6 +170,7 @@ function finishRequest() {
 function handleChatChunk(data) {
   if (!busy || data.requestId !== activeRequestId) return;
   activeAssistantText += data.text || '';
+  queueSpeech(data.text || '');
   if (activeAssistantBubble) activeAssistantBubble.textContent = activeAssistantText;
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
@@ -145,7 +182,7 @@ function handleChatDone(data) {
   } else {
     conversation.push({ role: 'assistant', content: activeAssistantText });
     if (conversation.length > 24) conversation = conversation.slice(-24);
-    speak(activeAssistantText);
+    queueSpeech('', true);
   }
   $('activeModelValue').textContent = data.model || modelSelect.value;
   $('engineValue').textContent = 'QWEN 2.5';
@@ -237,7 +274,12 @@ $('voiceToggle').addEventListener('click', () => {
   voiceReplies = !voiceReplies;
   $('voiceToggle').textContent = `VOICE: ${voiceReplies ? 'ON' : 'OFF'}`;
   $('voiceToggle').classList.toggle('active', voiceReplies);
-  if (!voiceReplies && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+  if (!voiceReplies && 'speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+    speechQueue = [];
+    pendingSpeechText = '';
+    speechActive = false;
+  }
 });
 $('clearBtn').addEventListener('click', () => {
   if (activeRequestId) window.nargis.cancelChat(activeRequestId);
@@ -349,6 +391,9 @@ async function stopRecording(manual = false) {
 
 async function startRecording() {
   try {
+    voiceReplies = true;
+    $('voiceToggle').textContent = 'VOICE: ON';
+    $('voiceToggle').classList.add('active');
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     recordedChunks = [];
     hasSpeech = false;
