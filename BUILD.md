@@ -211,7 +211,7 @@ On smaller windows, collapse panels into a usable stacked layout. Do not allow t
 Implement voice as an optional convenience; text chat must always work.
 
 ### Speech input
-- Use Web Speech API (`SpeechRecognition` / `webkitSpeechRecognition`) when supported by the installed Electron/Chromium runtime.
+- Use local Whisper recognition through microphone capture; do not depend on Electron's online `SpeechRecognition` provider.
 - Clearly show whether voice input is available.
 - Add a microphone toggle with listening state and graceful error messages.
 - Provide a language setting: English (US) and Bangla (Bangladesh) at minimum (`en-US`, `bn-BD`).

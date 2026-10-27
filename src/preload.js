@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('nargis', {
   checkStatus: () => ipcRenderer.invoke('ollama:status'),
   openApprovedCommand: (command) => ipcRenderer.invoke('system:open-approved', command),
+  transcribe: (payload) => ipcRenderer.invoke('speech:transcribe', payload),
   startChat: (payload) => ipcRenderer.send('ollama:chat:start', payload),
   cancelChat: (requestId) => ipcRenderer.send('ollama:chat:cancel', requestId),
   onChatChunk: (callback) => {

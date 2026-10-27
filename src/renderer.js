@@ -10,8 +10,10 @@ let activeRequestId = null;
 let activeAssistantBubble = null;
 let activeAssistantText = '';
 let voiceReplies = false;
-let recognition = null;
+let mediaRecorder = null;
+let recordedChunks = [];
 let listening = false;
+let speechLanguage = 'en-US';
 
 const SYSTEM_PROMPT = `You are NARGIS, a capable, calm, concise personal AI assistant inspired by a futuristic cinematic assistant. You run locally on the user's computer using Qwen through Ollama. Be helpful and direct. Use clear formatting when useful. You may speak English or Bangla based on the user's language. Never claim you have performed actions on the computer unless a real tool has confirmed it. You do not have access to the web, files, or operating system unless a tool is explicitly provided. If asked to control the computer, explain what the user can do or ask before suggesting risky steps.`;
 
@@ -242,39 +244,78 @@ async function checkStatus() {
   }
 }
 
-function setupVoice() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (SpeechRecognition) {
-    recognition = new SpeechRecognition();
-    recognition.lang = 'en-US';
-    recognition.interimResults = true;
-    recognition.continuous = false;
-    $('voiceInputStatus').textContent = 'AVAILABLE';
-    recognition.onstart = () => { listening = true; $('micBtn').classList.add('listening'); $('coreState').textContent = 'LISTENING'; input.placeholder = 'Listening…'; };
-    recognition.onresult = (event) => {
-      let finalText = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) finalText += event.results[i][0].transcript;
+async function decodeRecording(blob) {
+  const buffer = await blob.arrayBuffer();
+  const context = new AudioContext();
+  const source = await context.decodeAudioData(buffer);
+  const inputData = source.getChannelData(0);
+  const targetLength = Math.floor(inputData.length * 16000 / source.sampleRate);
+  const output = new Float32Array(targetLength);
+  for (let i = 0; i < targetLength; i++) {
+    const position = i * source.sampleRate / 16000;
+    const left = Math.floor(position);
+    const right = Math.min(left + 1, inputData.length - 1);
+    const fraction = position - left;
+    output[i] = inputData[left] * (1 - fraction) + inputData[right] * fraction;
+  }
+  await context.close();
+  return Array.from(output);
+}
+
+async function stopRecording() {
+  if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+  mediaRecorder.stop();
+  listening = false;
+  $('micBtn').classList.remove('listening');
+  $('coreState').textContent = 'TRANSCRIBING LOCALLY';
+  input.placeholder = 'Transcribing with local Whisper…';
+}
+
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = event => { if (event.data.size) recordedChunks.push(event.data); };
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(track => track.stop());
+      try {
+        const audio = await decodeRecording(new Blob(recordedChunks, { type: mediaRecorder.mimeType }));
+        const result = await window.nargis.transcribe({ audio, language: speechLanguage });
+        if (!result.ok) throw new Error(result.error);
+        if (result.text) {
+          input.value = result.text;
+          sendMessage();
+        } else {
+          addMessage('assistant', 'No speech was detected. Please try again.', true);
+        }
+      } catch (error) {
+        addMessage('assistant', `${error.message} You can still type your message.`, true);
+      } finally {
+        $('coreState').textContent = 'AWAITING INPUT';
+        input.placeholder = 'Transmit a command to NARGIS...';
       }
-      if (finalText.trim()) { input.value = finalText.trim(); sendMessage(); }
     };
-    recognition.onerror = (event) => {
-      const detail = event.error === 'network'
-        ? 'This Electron speech provider needs an internet connection. Voice input is unavailable offline.'
-        : event.error === 'not-allowed'
-          ? 'Microphone access was denied. Allow microphone access for NARGIS and try again.'
-          : `Speech recognition reported "${event.error}".`;
-      addMessage('assistant', `${detail} You can still type your message.`, true);
-    };
-    recognition.onend = () => { listening = false; $('micBtn').classList.remove('listening'); $('coreState').textContent = 'AWAITING INPUT'; input.placeholder = 'Transmit a command to NARGIS...'; };
-    $('micBtn').addEventListener('click', () => {
-      if (listening) recognition.stop();
-      else { try { recognition.start(); } catch { /* ignore duplicate starts */ } }
-    });
+    mediaRecorder.start();
+    listening = true;
+    $('micBtn').classList.add('listening');
+    $('coreState').textContent = 'LISTENING';
+    input.placeholder = 'Listening… click the microphone to stop';
+  } catch (error) {
+    $('voiceInputStatus').textContent = 'PERMISSION NEEDED';
+    addMessage('assistant', `Microphone access failed: ${error.message}. You can still type your message.`, true);
+  }
+}
+
+function setupVoice() {
+  if (navigator.mediaDevices?.getUserMedia && window.MediaRecorder && window.AudioContext) {
+    $('voiceInputStatus').textContent = 'LOCAL WHISPER';
+    $('micBtn').title = 'Record speech and transcribe locally with Whisper';
+    $('micBtn').addEventListener('click', () => listening ? stopRecording() : startRecording());
   } else {
     $('voiceInputStatus').textContent = 'UNAVAILABLE';
-    $('micBtn').title = 'Speech recognition is not supported in this build';
-    $('micBtn').addEventListener('click', () => addMessage('assistant', 'Speech recognition is not available in this build. Please type your message instead.', true));
+    $('micBtn').title = 'Local microphone recording is not supported in this build';
+    $('micBtn').addEventListener('click', () => addMessage('assistant', 'Local microphone recording is not available in this build. Please type your message instead.', true));
   }
   $('voiceOutputStatus').textContent = 'speechSynthesis' in window ? 'AVAILABLE' : 'UNAVAILABLE';
 }

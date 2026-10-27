@@ -18,7 +18,17 @@
   "build": {
     "appId": "local.nargis.qwen",
     "productName": "NARGIS Qwen",
-    "files": ["src/**/*", "package.json"],
-    "win": { "target": ["portable"] }
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ]
+    }
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^4.3.1"
   }
 }

@@ -7,6 +7,7 @@ const { spawn } = require('node:child_process');
 const OLLAMA_BASE = (process.env.OLLAMA_HOST || 'http://127.0.0.1:11434').replace(/\/+$/, '');
 const allowedModels = new Set(['qwen2.5:3b', 'qwen2.5:7b']);
 const activeRequests = new Map();
+let transcriberPromise;
 let mainWindow;
 
 const appPaths = {
@@ -36,6 +37,15 @@ function launchApprovedApp(name) {
   if (!executable) throw new Error(`${name} is not installed in a standard Windows location.`);
   const child = spawn(executable, [], { detached: true, stdio: 'ignore', windowsHide: true });
   child.unref();
+}
+
+async function getTranscriber() {
+  if (!transcriberPromise) {
+    transcriberPromise = import('@huggingface/transformers').then(({ pipeline }) =>
+      pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny')
+    );
+  }
+  return transcriberPromise;
 }
 
 function getOllamaUrl() {
@@ -119,6 +129,23 @@ app.whenReady().then(() => {
       return { ok: true, message: `Opened ${appName === 'vscode' ? 'Visual Studio Code' : appName}.` };
     } catch (error) {
       return { ok: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('speech:transcribe', async (_event, payload) => {
+    if (!payload || !Array.isArray(payload.audio) || payload.audio.length === 0 || payload.audio.length > 16_000 * 120) {
+      return { ok: false, error: 'Invalid or overly long audio recording.' };
+    }
+    try {
+      const transcriber = await getTranscriber();
+      const output = await transcriber(new Float32Array(payload.audio), {
+        language: payload.language === 'bn-BD' ? 'bengali' : 'english',
+        task: 'transcribe',
+        return_timestamps: false
+      });
+      return { ok: true, text: output.text.trim() };
+    } catch (error) {
+      return { ok: false, error: `Local Whisper could not transcribe the recording: ${error.message}` };
     }
   });
 
