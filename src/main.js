@@ -1,10 +1,42 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { existsSync } = require('node:fs');
+const { homedir } = require('node:os');
 const path = require('node:path');
+const { spawn } = require('node:child_process');
 
 const OLLAMA_BASE = (process.env.OLLAMA_HOST || 'http://127.0.0.1:11434').replace(/\/+$/, '');
 const allowedModels = new Set(['qwen2.5:3b', 'qwen2.5:7b']);
 const activeRequests = new Map();
 let mainWindow;
+
+const appPaths = {
+  notepad: [path.join(process.env.WINDIR || 'C:\\Windows', 'System32', 'notepad.exe')],
+  calculator: [
+    path.join(process.env.WINDIR || 'C:\\Windows', 'System32', 'calc.exe'),
+    path.join(process.env.WINDIR || 'C:\\Windows', 'System32', 'win32calc.exe')
+  ],
+  chrome: [
+    path.join(process.env.PROGRAMFILES || 'C:\\Program Files', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    path.join(process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    path.join(process.env.LOCALAPPDATA || path.join(homedir(), 'AppData', 'Local'), 'Google', 'Chrome', 'Application', 'chrome.exe')
+  ],
+  vscode: [
+    path.join(process.env.LOCALAPPDATA || path.join(homedir(), 'AppData', 'Local'), 'Programs', 'Microsoft VS Code', 'Code.exe'),
+    path.join(process.env.PROGRAMFILES || 'C:\\Program Files', 'Microsoft VS Code', 'Code.exe'),
+    path.join(process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)', 'Microsoft VS Code', 'Code.exe')
+  ]
+};
+
+function findExecutable(candidates) {
+  return candidates.find(candidate => existsSync(candidate));
+}
+
+function launchApprovedApp(name) {
+  const executable = findExecutable(appPaths[name]);
+  if (!executable) throw new Error(`${name} is not installed in a standard Windows location.`);
+  const child = spawn(executable, [], { detached: true, stdio: 'ignore', windowsHide: true });
+  child.unref();
+}
 
 function getOllamaUrl() {
   const url = new URL(OLLAMA_BASE);
@@ -63,6 +95,30 @@ app.whenReady().then(() => {
       return { ok: true, version, models: (tags.models || []).map(m => m.name), host: base };
     } catch (err) {
       return { ok: false, error: `${err.message}. Is Ollama running?`, host: OLLAMA_BASE };
+    }
+  });
+
+  ipcMain.handle('system:open-approved', async (_event, command) => {
+    const approvedCommand = typeof command === 'string' ? command.trim().toLowerCase() : '';
+    const commands = {
+      'open notepad': 'notepad',
+      'open calculator': 'calculator',
+      'open chrome': 'chrome',
+      'open visual studio code': 'vscode'
+    };
+    try {
+      if (approvedCommand === 'open my documents folder') {
+        const documentsPath = path.join(homedir(), 'Documents');
+        const error = await shell.openPath(documentsPath);
+        if (error) throw new Error(error);
+        return { ok: true, message: 'Opened your Documents folder.' };
+      }
+      const appName = commands[approvedCommand];
+      if (!appName) throw new Error('That PC command is not allowlisted.');
+      launchApprovedApp(appName);
+      return { ok: true, message: `Opened ${appName === 'vscode' ? 'Visual Studio Code' : appName}.` };
+    } catch (error) {
+      return { ok: false, error: error.message };
     }
   });
 

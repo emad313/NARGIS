@@ -42,6 +42,7 @@ NARGIS connects to `http://127.0.0.1:11434`. If Ollama is using a different HTTP
 - Click **Clear** to start a fresh conversation.
 - Click **Check system** to test Ollama and list available models.
 - Responses stream into the chat; click **Stop** to cancel an active generation.
+- You can use these approved local commands: `Open Notepad`, `Open Calculator`, `Open Chrome`, `Open Visual Studio Code`, and `Open my Documents folder`.
 
 ## Voice notes
 Voice input uses the browser SpeechRecognition API when available (usually works best on Windows). Some Electron builds route this feature through an online speech provider; a `network` error means voice input is unavailable without internet access. If your Electron build does not support it or microphone permission is denied, use text input. Speech output uses the built-in Web Speech API.
@@ -54,4 +55,4 @@ Voice input uses the browser SpeechRecognition API when available (usually works
 - **Blank window:** check Node.js and npm versions, then run `npm install` again.
 
 ## Safety / scope
-This starter project is a chat assistant, not a fully autonomous computer controller. It does not run arbitrary shell commands or delete/change files. Treat model output as untrusted. You can add explicit, allowlisted tools later.
+NARGIS supports only the five explicit, allowlisted commands documented above. It does not run arbitrary shell commands, use model output as executable instructions, or delete/change files. Treat model output as untrusted.

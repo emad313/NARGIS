@@ -109,9 +109,29 @@ function handleChatError(data) {
   finishRequest();
 }
 
+async function runApprovedCommand(content) {
+  const command = content.trim().toLowerCase();
+  const approvedCommands = new Set([
+    'open notepad',
+    'open calculator',
+    'open chrome',
+    'open visual studio code',
+    'open my documents folder'
+  ]);
+  if (!approvedCommands.has(command)) return false;
+  const result = await window.nargis.openApprovedCommand(command);
+  addMessage('assistant', result.ok ? result.message : `I could not complete that command: ${result.error}`, !result.ok);
+  return true;
+}
+
 async function sendMessage(text) {
   const content = (text ?? input.value).trim();
   if (!content || busy) return;
+  if (await runApprovedCommand(content)) {
+    input.value = '';
+    input.style.height = 'auto';
+    return;
+  }
   input.value = '';
   input.style.height = 'auto';
   addMessage('user', content);
