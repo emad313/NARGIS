@@ -21,6 +21,8 @@ let hasSpeech = false;
 let selectedSpeechVoice = '';
 let continuousVoice = false;
 let stopVoiceRequested = false;
+let discardRecording = false;
+let speechResumePending = false;
 let speechQueue = [];
 let pendingSpeechText = '';
 let speechActive = false;
@@ -71,6 +73,11 @@ function setBusy(value) {
 
 function speak(text) {
   if (!voiceReplies || !('speechSynthesis' in window)) return;
+  if (listening) {
+    speechResumePending = continuousVoice && !stopVoiceRequested;
+    discardRecording = true;
+    stopRecording();
+  }
   const utterance = new SpeechSynthesisUtterance(text.slice(0, 3500));
   utterance.rate = 1;
   utterance.pitch = 0.92;
@@ -79,10 +86,18 @@ function speak(text) {
   utterance.onend = () => {
     speechActive = false;
     playNextSpeech();
+    if (!speechActive && speechResumePending && continuousVoice && !stopVoiceRequested) {
+      speechResumePending = false;
+      startRecording();
+    }
   };
   utterance.onerror = () => {
     speechActive = false;
     playNextSpeech();
+    if (!speechActive && speechResumePending && continuousVoice && !stopVoiceRequested) {
+      speechResumePending = false;
+      startRecording();
+    }
   };
   window.speechSynthesis.speak(utterance);
 }
@@ -369,6 +384,7 @@ async function stopRecording(manual = false) {
   if (manual) {
     continuousVoice = false;
     stopVoiceRequested = true;
+    speechResumePending = false;
   }
   if (recordingTimer) {
     clearTimeout(recordingTimer);
@@ -394,9 +410,19 @@ async function startRecording() {
     voiceReplies = true;
     $('voiceToggle').textContent = 'VOICE: ON';
     $('voiceToggle').classList.add('active');
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        channelCount: 1
+      }
+    });
     recordedChunks = [];
     hasSpeech = false;
+    discardRecording = false;
+    const calibrationStarted = performance.now();
+    let noiseFloor = 0.01;
     const audioContext = new AudioContext();
     const analyser = audioContext.createAnalyser();
     analyser.fftSize = 1024;
@@ -415,7 +441,11 @@ async function startRecording() {
         total += normalized * normalized;
       }
       const volume = Math.sqrt(total / levels.length);
-      if (volume > 0.025) {
+      if (performance.now() - calibrationStarted < 1000) {
+        noiseFloor = Math.max(noiseFloor, volume);
+      }
+      const speechThreshold = Math.max(0.035, noiseFloor * 3);
+      if (!speechActive && volume > speechThreshold) {
         hasSpeech = true;
         if (silenceTimer) {
           clearTimeout(silenceTimer);
@@ -431,6 +461,7 @@ async function startRecording() {
     mediaRecorder.onstop = async () => {
       stream.getTracks().forEach(track => track.stop());
       try {
+        if (discardRecording) return;
         if (!recordedChunks.length) throw new Error('No microphone audio was recorded.');
         addMessage('assistant', 'Audio captured. Loading local Whisper and transcribing…');
         const audio = await decodeRecording(new Blob(recordedChunks, { type: mediaRecorder.mimeType }));
@@ -454,7 +485,7 @@ async function startRecording() {
         $('coreState').textContent = 'AWAITING INPUT';
         input.placeholder = 'Transmit a command to NARGIS...';
         mediaRecorder = null;
-        if (continuousVoice && !stopVoiceRequested) {
+        if (continuousVoice && !stopVoiceRequested && !speechActive && !speechResumePending) {
           setTimeout(() => startRecording(), 250);
         }
       }

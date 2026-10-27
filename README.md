@@ -45,7 +45,7 @@ NARGIS connects to `http://127.0.0.1:11434`. If Ollama is using a different HTTP
 - You can use these approved local commands: `Open Notepad`, `Open Calculator`, `Open Chrome`, `Open Visual Studio Code`, and `Open my Documents folder`.
 
 ## Voice notes
-Voice input uses continuous local Whisper recognition. Click the microphone button once to start; each utterance is submitted after about five seconds of silence and listening resumes automatically. Click the microphone again or say “stop voice capture” to stop. The first transcription downloads the `Xenova/whisper-tiny` model; subsequent transcriptions work offline. Microphone permission is required. Speech output uses the built-in Web Speech API.
+Voice input uses continuous local Whisper recognition with microphone echo cancellation, noise suppression, and background-noise filtering. Click the microphone button once to start; each utterance is submitted after about five seconds of silence and listening resumes automatically. Listening pauses while NARGIS speaks so its response is not captured as a new command. Click the microphone again or say “stop voice capture” to stop. The first transcription downloads the `Xenova/whisper-tiny` model; subsequent transcriptions work offline. Microphone permission is required. Speech output uses the built-in Web Speech API.
 
 ## Troubleshooting
 - **Ollama offline:** open the Ollama app or run `ollama serve`, then click Check system.
