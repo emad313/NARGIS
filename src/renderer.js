@@ -14,6 +14,7 @@ let mediaRecorder = null;
 let recordedChunks = [];
 let listening = false;
 let speechLanguage = 'en-US';
+let recordingTimer = null;
 
 const SYSTEM_PROMPT = `You are NARGIS, a capable, calm, concise personal AI assistant inspired by a futuristic cinematic assistant. You run locally on the user's computer using Qwen through Ollama. Be helpful and direct. Use clear formatting when useful. You may speak English or Bangla based on the user's language. Never claim you have performed actions on the computer unless a real tool has confirmed it. You do not have access to the web, files, or operating system unless a tool is explicitly provided. If asked to control the computer, explain what the user can do or ask before suggesting risky steps.`;
 
@@ -264,6 +265,10 @@ async function decodeRecording(blob) {
 
 async function stopRecording() {
   if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+  if (recordingTimer) {
+    clearTimeout(recordingTimer);
+    recordingTimer = null;
+  }
   mediaRecorder.stop();
   listening = false;
   $('micBtn').classList.remove('listening');
@@ -280,6 +285,8 @@ async function startRecording() {
     mediaRecorder.onstop = async () => {
       stream.getTracks().forEach(track => track.stop());
       try {
+        if (!recordedChunks.length) throw new Error('No microphone audio was recorded.');
+        addMessage('assistant', 'Audio captured. Loading local Whisper and transcribing…');
         const audio = await decodeRecording(new Blob(recordedChunks, { type: mediaRecorder.mimeType }));
         const result = await window.nargis.transcribe({ audio, language: speechLanguage });
         if (!result.ok) throw new Error(result.error);
@@ -297,6 +304,7 @@ async function startRecording() {
       }
     };
     mediaRecorder.start();
+    recordingTimer = setTimeout(() => stopRecording(), 15000);
     listening = true;
     $('micBtn').classList.add('listening');
     $('coreState').textContent = 'LISTENING';
