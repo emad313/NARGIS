@@ -13,7 +13,6 @@ let voiceReplies = false;
 let mediaRecorder = null;
 let recordedChunks = [];
 let listening = false;
-let speechLanguage = 'en-US';
 let recordingTimer = null;
 let silenceTimer = null;
 let silenceMonitor = null;
@@ -23,6 +22,7 @@ let continuousVoice = false;
 let stopVoiceRequested = false;
 let discardRecording = false;
 let speechResumePending = false;
+let speechLanguage = localStorage.getItem('nargis-speech-language') || 'en-US';
 let speechQueue = [];
 let pendingSpeechText = '';
 let speechActive = false;
@@ -79,10 +79,13 @@ function speak(text) {
     stopRecording();
   }
   const utterance = new SpeechSynthesisUtterance(text.slice(0, 3500));
+  utterance.lang = speechLanguage;
   utterance.rate = 1;
   utterance.pitch = 0.92;
   const voices = window.speechSynthesis.getVoices();
-  utterance.voice = voices.find(voice => voice.voiceURI === selectedSpeechVoice) || null;
+  utterance.voice = voices.find(voice => voice.voiceURI === selectedSpeechVoice)
+    || voices.find(voice => voice.lang.toLowerCase().startsWith(speechLanguage.slice(0, 2).toLowerCase()))
+    || null;
   utterance.onend = () => {
     speechActive = false;
     playNextSpeech();
@@ -148,6 +151,20 @@ function updateSpeechVoices() {
 
 function handleVoiceCommand(content) {
   const command = content.toLowerCase();
+  if (/\b(bangla|বাংলা)\b/.test(command) && /\b(switch|use|speak|language|voice)\b/.test(command)) {
+    speechLanguage = 'bn-BD';
+    $('speechLanguage').value = speechLanguage;
+    localStorage.setItem('nargis-speech-language', speechLanguage);
+    addMessage('assistant', 'Voice input language changed to Bangla.');
+    return true;
+  }
+  if (/\b(english|ইংরেজি)\b/.test(command) && /\b(switch|use|speak|language|voice)\b/.test(command)) {
+    speechLanguage = 'en-US';
+    $('speechLanguage').value = speechLanguage;
+    localStorage.setItem('nargis-speech-language', speechLanguage);
+    addMessage('assistant', 'Voice input language changed to English.');
+    return true;
+  }
   if (!command.includes('voice')) return false;
   const voices = window.speechSynthesis?.getVoices() || [];
   let matches;
@@ -506,6 +523,11 @@ async function startRecording() {
 }
 
 function setupVoice() {
+  $('speechLanguage').value = speechLanguage;
+  $('speechLanguage').addEventListener('change', event => {
+    speechLanguage = event.target.value;
+    localStorage.setItem('nargis-speech-language', speechLanguage);
+  });
   if (navigator.mediaDevices?.getUserMedia && window.MediaRecorder && window.AudioContext) {
     $('voiceInputStatus').textContent = 'LOCAL WHISPER';
     $('micBtn').title = 'Record speech and transcribe locally with Whisper';
