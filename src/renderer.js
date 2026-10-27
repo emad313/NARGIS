@@ -292,7 +292,8 @@ async function startRecording() {
         if (!result.ok) throw new Error(result.error);
         if (result.text) {
           input.value = result.text;
-          sendMessage();
+          $('coreState').textContent = 'SENDING TRANSCRIPTION';
+          await sendMessage(result.text);
         } else {
           addMessage('assistant', 'No speech was detected. Please try again.', true);
         }
