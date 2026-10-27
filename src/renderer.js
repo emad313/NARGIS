@@ -238,7 +238,14 @@ function setupVoice() {
       }
       if (finalText.trim()) { input.value = finalText.trim(); sendMessage(); }
     };
-    recognition.onerror = (event) => { addMessage('assistant', `Voice input issue: ${event.error}. You can still type your message.`, true); };
+    recognition.onerror = (event) => {
+      const detail = event.error === 'network'
+        ? 'This Electron speech provider needs an internet connection. Voice input is unavailable offline.'
+        : event.error === 'not-allowed'
+          ? 'Microphone access was denied. Allow microphone access for NARGIS and try again.'
+          : `Speech recognition reported "${event.error}".`;
+      addMessage('assistant', `${detail} You can still type your message.`, true);
+    };
     recognition.onend = () => { listening = false; $('micBtn').classList.remove('listening'); $('coreState').textContent = 'AWAITING INPUT'; input.placeholder = 'Transmit a command to NARGIS...'; };
     $('micBtn').addEventListener('click', () => {
       if (listening) recognition.stop();

@@ -44,7 +44,7 @@ NARGIS connects to `http://127.0.0.1:11434`. If Ollama is using a different HTTP
 - Responses stream into the chat; click **Stop** to cancel an active generation.
 
 ## Voice notes
-Voice input uses the browser SpeechRecognition API when available (usually works best on Windows). If your Electron build does not support it, use text input. Speech output uses the built-in Web Speech API.
+Voice input uses the browser SpeechRecognition API when available (usually works best on Windows). Some Electron builds route this feature through an online speech provider; a `network` error means voice input is unavailable without internet access. If your Electron build does not support it or microphone permission is denied, use text input. Speech output uses the built-in Web Speech API.
 
 ## Troubleshooting
 - **Ollama offline:** open the Ollama app or run `ollama serve`, then click Check system.
