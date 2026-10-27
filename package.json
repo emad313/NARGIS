@@ -1,0 +1,24 @@
+{
+  "name": "nargis-qwen-desktop",
+  "version": "1.0.0",
+  "description": "Local NARGIS-style assistant powered by Ollama and Qwen 2.5",
+  "main": "src/main.js",
+  "author": "Local User",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "test": "node --check src/main.js && node --check src/preload.js && node --check src/renderer.js",
+    "dist": "electron-builder --win portable"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "local.nargis.qwen",
+    "productName": "NARGIS Qwen",
+    "files": ["src/**/*", "package.json"],
+    "win": { "target": ["portable"] }
+  }
+}

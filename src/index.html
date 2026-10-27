@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self';">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NARGIS // QWEN LOCAL INTELLIGENCE</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="scanlines"></div>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark"><span>N</span></div>
+        <div><div class="brand-name">N.A.R.G.I.S.</div><div class="brand-sub">LOCAL INTELLIGENCE SYSTEM</div></div>
+      </div>
+      <div class="top-status"><span class="live-dot"></span><span id="topStatus">INITIALIZING SYSTEM</span></div>
+      <div class="top-right"><span class="chip">OFFLINE AI</span><span id="clock">00:00:00</span></div>
+    </header>
+
+    <main class="layout">
+      <aside class="left-panel panel">
+        <div class="panel-heading"><span class="tiny-icon">◈</span> SYSTEM TELEMETRY <span class="heading-line"></span></div>
+        <div class="telemetry">
+          <div class="metric"><div class="metric-label">AI ENGINE</div><div class="metric-value" id="engineValue">QWEN 2.5</div><div class="metric-note">LOCAL INFERENCE</div></div>
+          <div class="metric"><div class="metric-label">CONNECTION</div><div class="metric-value"><span class="status-light" id="connectionLight"></span><span id="connectionValue">CHECKING</span></div><div class="metric-note" id="connectionNote">OLLAMA API</div></div>
+          <div class="metric"><div class="metric-label">ACTIVE MODEL</div><div class="metric-value small-value" id="activeModelValue">qwen2.5:3b</div><div class="metric-note">MODEL SELECTOR</div></div>
+          <div class="metric"><div class="metric-label">SESSION MESSAGES</div><div class="metric-value" id="messageCount">00</div><div class="metric-note">CURRENT SESSION</div></div>
+        </div>
+        <div class="panel-heading second-heading"><span class="tiny-icon">⌁</span> QUICK PROTOCOLS <span class="heading-line"></span></div>
+        <div class="quick-actions">
+          <button class="quick-action" data-prompt="Introduce yourself as NARGIS and explain what you can help me with."><span>◉</span><div><b>Initialize</b><small>Introduce yourself</small></div><i>↗</i></button>
+          <button class="quick-action" data-prompt="Give me a concise plan for today, including focus blocks and breaks."><span>◷</span><div><b>Daily briefing</b><small>Plan my day</small></div><i>↗</i></button>
+          <button class="quick-action" data-prompt="Explain a difficult technical topic clearly, using an example and a short summary."><span>⌘</span><div><b>Knowledge scan</b><small>Explain a topic</small></div><i>↗</i></button>
+          <button class="quick-action" data-prompt="Help me debug this issue. Ask me for the error message, relevant code, and what I expected to happen."><span>⌬</span><div><b>Code assist</b><small>Debug a problem</small></div><i>↗</i></button>
+        </div>
+        <div class="left-footer"><div class="shield">⬡</div><div><b>LOCAL-FIRST MODE</b><small>Prompts stay on your machine<br>when using local Ollama.</small></div></div>
+      </aside>
+
+      <section class="center-panel">
+        <div class="hero panel">
+          <div class="hero-top"><span>CORE VISUALIZATION</span><span class="hero-id">CORE-01 / ACTIVE</span></div>
+          <div class="reactor-wrap">
+            <div class="reactor-grid"></div>
+            <div class="orbit orbit-a"></div><div class="orbit orbit-b"></div><div class="orbit orbit-c"></div>
+            <div class="reactor-ring ring-a"></div><div class="reactor-ring ring-b"></div><div class="reactor-ring ring-c"></div>
+            <div class="reactor-core"><div class="core-inner"><span>N</span></div></div>
+            <div class="orbit-node node-a"></div><div class="orbit-node node-b"></div><div class="orbit-node node-c"></div>
+            <div class="core-label">NEURAL CORE <span>● ONLINE</span></div>
+          </div>
+          <div class="hero-bottom"><span><i class="mini-dot"></i> LOCAL MODEL LINK</span><span id="coreState">AWAITING INPUT</span><span>SECURE CHANNEL // 01</span></div>
+        </div>
+
+        <div class="chat-panel panel">
+          <div class="chat-header"><div><span class="tiny-icon">◈</span><span>COMMAND INTERFACE</span><small>ENCRYPTED LOCAL SESSION</small></div><div class="chat-controls"><button id="voiceToggle" class="small-control" title="Toggle spoken replies">VOICE: OFF</button><button id="clearBtn" class="small-control">CLEAR</button></div></div>
+          <div id="chatMessages" class="messages" aria-live="polite">
+            <div class="message assistant-message">
+              <div class="avatar">N</div><div class="message-body"><div class="message-meta">NARGIS <span>13:34:00</span></div><div class="bubble">Systems standing by. I am connected to your local Qwen models through Ollama when the service is available. Select a model and send a message to begin.</div></div>
+            </div>
+          </div>
+          <div class="typing-row" id="typingRow" hidden><span class="typing-dots"><i></i><i></i><i></i></span><span>NARGIS IS PROCESSING</span></div>
+          <div class="composer">
+            <button id="micBtn" class="mic-btn" title="Use speech recognition">⌁</button>
+            <div class="input-wrap"><textarea id="messageInput" rows="1" placeholder="Transmit a command to NARGIS..." aria-label="Message to NARGIS"></textarea><div class="input-hint">ENTER TO SEND <span>•</span> SHIFT + ENTER FOR NEW LINE</div></div>
+            <button id="sendBtn" class="send-btn"><span>TRANSMIT</span><b>➤</b></button><button id="stopBtn" class="send-btn stop-btn" hidden><span>STOP</span><b>■</b></button>
+          </div>
+          <div class="chat-bottom"><span><i class="mini-dot"></i> ALL SYSTEMS NOMINAL</span><span>POWERED BY OLLAMA + QWEN</span></div>
+        </div>
+      </section>
+
+      <aside class="right-panel">
+        <div class="panel model-panel">
+          <div class="panel-heading"><span class="tiny-icon">⌘</span> MODEL CONTROL <span class="heading-line"></span></div>
+          <label class="field-label" for="modelSelect">ACTIVE MODEL</label>
+          <select id="modelSelect"><option value="qwen2.5:3b">Qwen 2.5 · 3B</option><option value="qwen2.5:7b">Qwen 2.5 · 7B</option></select>
+          <div class="model-desc" id="modelDesc">Faster responses · lower memory use</div>
+          <button id="checkBtn" class="outline-btn">⟳ &nbsp; CHECK OLLAMA</button>
+          <div class="model-list-title">DETECTED LOCAL MODELS</div>
+          <div id="modelList" class="model-list"><div class="model-empty">Checking Ollama…</div></div>
+        </div>
+        <div class="panel diagnostics">
+          <div class="panel-heading"><span class="tiny-icon">⌁</span> DIAGNOSTICS <span class="heading-line"></span></div>
+          <div class="diag-row"><span>API ENDPOINT</span><b id="endpointValue">localhost:11434</b></div>
+          <div class="diag-row"><span>VOICE INPUT</span><b id="voiceInputStatus">DETECTING</b></div>
+          <div class="diag-row"><span>SPEECH OUTPUT</span><b id="voiceOutputStatus">DETECTING</b></div>
+          <div class="diag-row"><span>SESSION</span><b id="sessionValue">NEW</b></div>
+          <div class="signal-box"><div class="signal-head"><span>CORE SIGNAL</span><span>LIVE</span></div><div class="signal-bars" id="signalBars"></div></div>
+        </div>
+        <div class="panel system-note"><div class="note-symbol">ⓘ</div><div><b>OPERATOR NOTE</b><p>NARGIS runs locally through Ollama. Model speed depends on your CPU, RAM and GPU. Voice recognition availability depends on your system.</p></div></div>
+      </aside>
+    </main>
+    <footer class="footer"><span>NARGIS OS // PERSONAL ASSISTANT INTERFACE</span><span>BUILD 1.0.0 <i>•</i> LOCAL NODE RUNTIME</span></footer>
+  </div>
+  <script src="renderer.js"></script>
+</body>
+</html>
