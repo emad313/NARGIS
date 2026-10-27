@@ -15,6 +15,10 @@ let recordedChunks = [];
 let listening = false;
 let speechLanguage = 'en-US';
 let recordingTimer = null;
+let silenceTimer = null;
+let silenceMonitor = null;
+let hasSpeech = false;
+let selectedSpeechVoice = '';
 
 const SYSTEM_PROMPT = `You are NARGIS, a capable, calm, concise personal AI assistant inspired by a futuristic cinematic assistant. You run locally on the user's computer using Qwen through Ollama. Be helpful and direct. Use clear formatting when useful. You may speak English or Bangla based on the user's language. Never claim you have performed actions on the computer unless a real tool has confirmed it. You do not have access to the web, files, or operating system unless a tool is explicitly provided. If asked to control the computer, explain what the user can do or ask before suggesting risky steps.`;
 
@@ -66,7 +70,55 @@ function speak(text) {
   const utterance = new SpeechSynthesisUtterance(text.slice(0, 3500));
   utterance.rate = 1;
   utterance.pitch = 0.92;
+  const voices = window.speechSynthesis.getVoices();
+  utterance.voice = voices.find(voice => voice.voiceURI === selectedSpeechVoice) || null;
   window.speechSynthesis.speak(utterance);
+}
+
+function updateSpeechVoices() {
+  const voiceSelect = $('voiceSelect');
+  if (!voiceSelect || !('speechSynthesis' in window)) return;
+  const current = selectedSpeechVoice || voiceSelect.value;
+  voiceSelect.innerHTML = '';
+  const defaultOption = document.createElement('option');
+  defaultOption.value = '';
+  defaultOption.textContent = 'System default';
+  voiceSelect.appendChild(defaultOption);
+  window.speechSynthesis.getVoices().forEach(voice => {
+    const option = document.createElement('option');
+    option.value = voice.voiceURI;
+    option.textContent = `${voice.name} (${voice.lang})`;
+    voiceSelect.appendChild(option);
+  });
+  voiceSelect.value = current;
+}
+
+function handleVoiceCommand(content) {
+  const command = content.toLowerCase();
+  if (!command.includes('voice')) return false;
+  const voices = window.speechSynthesis?.getVoices() || [];
+  let matches;
+  if (/\bfemale|woman|girl\b/.test(command)) {
+    matches = voices.filter(voice => /female|woman|samantha|zira|hazel|susan|aria|jenny/i.test(voice.name));
+  } else if (/\bmale|man|boy\b/.test(command)) {
+    matches = voices.filter(voice => /male|david|mark|george|ryan|guy/i.test(voice.name));
+  } else if (/\bchange|switch|different\b/.test(command)) {
+    matches = voices.filter(voice => voice.voiceURI !== selectedSpeechVoice);
+  } else {
+    return false;
+  }
+  if (!matches.length) {
+    addMessage('assistant', 'That voice type is not available in your Windows speech voices. Choose a voice manually from the Speaking Voice selector.', true);
+    return true;
+  }
+  selectedSpeechVoice = matches[0].voiceURI;
+  $('voiceSelect').value = selectedSpeechVoice;
+  voiceReplies = true;
+  $('voiceToggle').textContent = 'VOICE: ON';
+  $('voiceToggle').classList.add('active');
+  addMessage('assistant', `Voice changed to ${matches[0].name}. Voice replies are now enabled.`);
+  speak(`Voice changed to ${matches[0].name}.`);
+  return true;
 }
 
 function finishRequest() {
@@ -130,6 +182,11 @@ async function runApprovedCommand(content) {
 async function sendMessage(text) {
   const content = (text ?? input.value).trim();
   if (!content || busy) return;
+  if (handleVoiceCommand(content)) {
+    input.value = '';
+    input.style.height = 'auto';
+    return;
+  }
   if (await runApprovedCommand(content)) {
     input.value = '';
     input.style.height = 'auto';
@@ -269,6 +326,14 @@ async function stopRecording() {
     clearTimeout(recordingTimer);
     recordingTimer = null;
   }
+  if (silenceMonitor) {
+    cancelAnimationFrame(silenceMonitor);
+    silenceMonitor = null;
+  }
+  if (silenceTimer) {
+    clearTimeout(silenceTimer);
+    silenceTimer = null;
+  }
   mediaRecorder.stop();
   listening = false;
   $('micBtn').classList.remove('listening');
@@ -280,6 +345,36 @@ async function startRecording() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     recordedChunks = [];
+    hasSpeech = false;
+    const audioContext = new AudioContext();
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 1024;
+    const microphone = audioContext.createMediaStreamSource(stream);
+    microphone.connect(analyser);
+    const levels = new Uint8Array(analyser.fftSize);
+    const monitorSilence = () => {
+      if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+        audioContext.close();
+        return;
+      }
+      analyser.getByteTimeDomainData(levels);
+      let total = 0;
+      for (const level of levels) {
+        const normalized = (level - 128) / 128;
+        total += normalized * normalized;
+      }
+      const volume = Math.sqrt(total / levels.length);
+      if (volume > 0.025) {
+        hasSpeech = true;
+        if (silenceTimer) {
+          clearTimeout(silenceTimer);
+          silenceTimer = null;
+        }
+      } else if (hasSpeech && !silenceTimer) {
+        silenceTimer = setTimeout(() => stopRecording(), 5000);
+      }
+      silenceMonitor = requestAnimationFrame(monitorSilence);
+    };
     mediaRecorder = new MediaRecorder(stream);
     mediaRecorder.ondataavailable = event => { if (event.data.size) recordedChunks.push(event.data); };
     mediaRecorder.onstop = async () => {
@@ -305,11 +400,12 @@ async function startRecording() {
       }
     };
     mediaRecorder.start();
-    recordingTimer = setTimeout(() => stopRecording(), 15000);
+    silenceMonitor = requestAnimationFrame(monitorSilence);
+    recordingTimer = setTimeout(() => stopRecording(), 60000);
     listening = true;
     $('micBtn').classList.add('listening');
     $('coreState').textContent = 'LISTENING';
-    input.placeholder = 'Listening… click the microphone to stop';
+    input.placeholder = 'Listening… stops after 5 seconds of silence';
   } catch (error) {
     $('voiceInputStatus').textContent = 'PERMISSION NEEDED';
     addMessage('assistant', `Microphone access failed: ${error.message}. You can still type your message.`, true);
@@ -327,6 +423,15 @@ function setupVoice() {
     $('micBtn').addEventListener('click', () => addMessage('assistant', 'Local microphone recording is not available in this build. Please type your message instead.', true));
   }
   $('voiceOutputStatus').textContent = 'speechSynthesis' in window ? 'AVAILABLE' : 'UNAVAILABLE';
+  if ('speechSynthesis' in window) {
+    selectedSpeechVoice = localStorage.getItem('nargis-speech-voice') || '';
+    updateSpeechVoices();
+    window.speechSynthesis.addEventListener('voiceschanged', updateSpeechVoices);
+    $('voiceSelect').addEventListener('change', event => {
+      selectedSpeechVoice = event.target.value;
+      localStorage.setItem('nargis-speech-voice', selectedSpeechVoice);
+    });
+  }
 }
 
 window.nargis.onChatChunk(handleChatChunk);
