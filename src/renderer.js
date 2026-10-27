@@ -19,6 +19,8 @@ let silenceTimer = null;
 let silenceMonitor = null;
 let hasSpeech = false;
 let selectedSpeechVoice = '';
+let continuousVoice = false;
+let stopVoiceRequested = false;
 
 const SYSTEM_PROMPT = `You are NARGIS, a capable, calm, concise personal AI assistant inspired by a futuristic cinematic assistant. You run locally on the user's computer using Qwen through Ollama. Be helpful and direct. Use clear formatting when useful. You may speak English or Bangla based on the user's language. Never claim you have performed actions on the computer unless a real tool has confirmed it. You do not have access to the web, files, or operating system unless a tool is explicitly provided. If asked to control the computer, explain what the user can do or ask before suggesting risky steps.`;
 
@@ -320,8 +322,12 @@ async function decodeRecording(blob) {
   return Array.from(output);
 }
 
-async function stopRecording() {
+async function stopRecording(manual = false) {
   if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+  if (manual) {
+    continuousVoice = false;
+    stopVoiceRequested = true;
+  }
   if (recordingTimer) {
     clearTimeout(recordingTimer);
     recordingTimer = null;
@@ -385,7 +391,12 @@ async function startRecording() {
         const audio = await decodeRecording(new Blob(recordedChunks, { type: mediaRecorder.mimeType }));
         const result = await window.nargis.transcribe({ audio, language: speechLanguage });
         if (!result.ok) throw new Error(result.error);
-        if (result.text) {
+        const transcript = result.text?.trim() || '';
+        if (/\b(stop|end|disable|turn off)\b.*\b(voice|record|capture|listening)\b/i.test(transcript)) {
+          continuousVoice = false;
+          stopVoiceRequested = true;
+          addMessage('assistant', 'Voice capture stopped.');
+        } else if (transcript) {
           input.value = result.text;
           $('coreState').textContent = 'SENDING TRANSCRIPTION';
           await sendMessage(result.text);
@@ -397,12 +408,18 @@ async function startRecording() {
       } finally {
         $('coreState').textContent = 'AWAITING INPUT';
         input.placeholder = 'Transmit a command to NARGIS...';
+        mediaRecorder = null;
+        if (continuousVoice && !stopVoiceRequested) {
+          setTimeout(() => startRecording(), 250);
+        }
       }
     };
     mediaRecorder.start();
     silenceMonitor = requestAnimationFrame(monitorSilence);
     recordingTimer = setTimeout(() => stopRecording(), 60000);
     listening = true;
+    continuousVoice = true;
+    stopVoiceRequested = false;
     $('micBtn').classList.add('listening');
     $('coreState').textContent = 'LISTENING';
     input.placeholder = 'Listening… stops after 5 seconds of silence';
@@ -416,7 +433,7 @@ function setupVoice() {
   if (navigator.mediaDevices?.getUserMedia && window.MediaRecorder && window.AudioContext) {
     $('voiceInputStatus').textContent = 'LOCAL WHISPER';
     $('micBtn').title = 'Record speech and transcribe locally with Whisper';
-    $('micBtn').addEventListener('click', () => listening ? stopRecording() : startRecording());
+    $('micBtn').addEventListener('click', () => listening ? stopRecording(true) : startRecording());
   } else {
     $('voiceInputStatus').textContent = 'UNAVAILABLE';
     $('micBtn').title = 'Local microphone recording is not supported in this build';
